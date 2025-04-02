@@ -1,8 +1,8 @@
 {
   "ANiStrm": {
     "name": "ANi Strm",
-    "description": "自动获取当季所有番剧，生成strm文件，mp刮削入库，emby直接播放，免去下载，轻松拥有一个番剧媒体库",
-    "version": "2.4.2",
+    "description": "自动获取当季所有番剧，生成strm文件，mp刮削入库，emby直接播放，免去下载，轻松拥有一个番剧媒体库，本插件基于https://github.com/honue/MoviePilot-Plugins/tree/main/plugins/anistrm修改，增加了反代地址的替换功能",
+    "version": "2.4.3",
     "v2": true,
     "icon": "https://raw.githubusercontent.com/DecaChI/MoviePilot-Plugins/main/icons/anistrm.png",
     "author": "DecaChI",

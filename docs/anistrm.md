@@ -2,6 +2,7 @@
     - [2023-10秋 刮削效果](#2023-10秋-刮削效果)
     - [注意事项](#注意事项)
     - [Todo](#Todo)
+## 本插件基于https://github.com/honue/MoviePilot-Plugins/tree/main/plugins/anistrm修改，增加了反代地址的替换功能
 ## 2023-10秋 刮削效果
 
 <div align="center">
