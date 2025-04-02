@@ -78,6 +78,8 @@ class ANiStrm(_PluginBase):
     _fulladd = False
     _storageplace = None
     _proxy_url = "https://openani.an-i.workers.dev"
+    _custom_season = None
+    _get_custom_season = False  # 是否获取指定季度番剧（一次性操作）
 
     # 定时器
     _scheduler: Optional[BackgroundScheduler] = None
@@ -93,6 +95,8 @@ class ANiStrm(_PluginBase):
             self._fulladd = config.get("fulladd")
             self._storageplace = config.get("storageplace")
             self._proxy_url = config.get("proxy_url") or "https://openani.an-i.workers.dev"
+            self._custom_season = config.get("custom_season")
+            self._get_custom_season = config.get("get_custom_season", False)
             # 加载模块
         if self._enabled or self._onlyonce:
             # 定时服务
@@ -122,7 +126,32 @@ class ANiStrm(_PluginBase):
                 self._scheduler.print_jobs()
                 self._scheduler.start()
 
+    def __validate_custom_season(self, season: str) -> bool:
+        """验证自定义季度格式是否正确"""
+        if not season:
+            return False
+        try:
+            # 检查格式是否为"年份-月份"
+            parts = season.split('-')
+            if len(parts) != 2:
+                return False
+            
+            year = int(parts[0])
+            month = int(parts[1])
+            # 验证月份是否为1、4、7、10中的一个（季度起始月）
+            return month in [1, 4, 7, 10] and year > 2000
+        except:
+            logger.error(f"自定义季度格式错误: {season}，应为'年份-月份'，如'2025-1'")
+            return False
+
     def __get_ani_season(self, idx_month: int = None) -> str:
+        # 如果启用了获取指定季度且指定季度有效，则使用指定季度
+        if self._get_custom_season and self._custom_season and self.__validate_custom_season(self._custom_season):
+            self._date = self._custom_season
+            logger.info(f"使用指定季度: {self._custom_season}")
+            return self._custom_season
+            
+        # 否则使用现有逻辑获取当前季度
         current_date = datetime.now()
         current_year = current_date.year
         current_month = idx_month if idx_month else current_date.month
@@ -185,21 +214,32 @@ class ANiStrm(_PluginBase):
 
     def __task(self, fulladd: bool = False):
         cnt = 0
-        # 增量添加更新
-        if not fulladd:
-            rss_info_list = self.get_latest_list()
-            logger.info(f'本次处理 {len(rss_info_list)} 个文件')
-            for rss_info in rss_info_list:
-                if self.__touch_strm_file(file_name=rss_info['title'], file_url=rss_info['link']):
-                    cnt += 1
-        # 全量添加当季
-        else:
-            name_list = self.get_current_season_list()
-            logger.info(f'本次处理 {len(name_list)} 个文件')
-            for file_name in name_list:
-                if self.__touch_strm_file(file_name=file_name):
-                    cnt += 1
-        logger.info(f'新创建了 {cnt} 个strm文件')
+        was_custom_season = self._get_custom_season  # 记录是否是获取指定季度的任务
+        
+        try:
+            # 增量添加更新
+            if not fulladd:
+                rss_info_list = self.get_latest_list()
+                logger.info(f'本次处理 {len(rss_info_list)} 个文件')
+                for rss_info in rss_info_list:
+                    if self.__touch_strm_file(file_name=rss_info['title'], file_url=rss_info['link']):
+                        cnt += 1
+            # 全量添加当季
+            else:
+                name_list = self.get_current_season_list()
+                logger.info(f'本次处理 {len(name_list)} 个文件')
+                for file_name in name_list:
+                    if self.__touch_strm_file(file_name=file_name):
+                        cnt += 1
+            logger.info(f'新创建了 {cnt} 个strm文件')
+        finally:
+            # 如果是获取指定季度的一次性任务，任务完成后重置相关配置
+            if was_custom_season:
+                logger.info("指定季度番剧获取完成，重置为获取当季番剧模式")
+                self._get_custom_season = False
+                # 可以选择是否清空自定义季度值，这里保留便于下次使用
+                # self._custom_season = ""
+                self.__update_config()
 
     def get_state(self) -> bool:
         return self._enabled
@@ -335,6 +375,45 @@ class ANiStrm(_PluginBase):
                                 'component': 'VCol',
                                 'props': {
                                     'cols': 12,
+                                    'md': 4
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VSwitch',
+                                        'props': {
+                                            'model': 'get_custom_season',
+                                            'label': '获取指定季度番剧(一次性)',
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 12,
+                                    'md': 4
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VTextField',
+                                        'props': {
+                                            'model': 'custom_season',
+                                            'label': '指定季度',
+                                            'placeholder': '格式:年份-月份，如2025-1',
+                                            'hint': '用于一次性获取指定季度番剧'
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        'component': 'VRow',
+                        'content': [
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 12,
                                 },
                                 'content': [
                                     {
@@ -371,6 +450,8 @@ class ANiStrm(_PluginBase):
             "storageplace": '/downloads/strm',
             "cron": "*/20 22,23,0,1 * * *",
             "proxy_url": "https://openani.an-i.workers.dev",
+            "custom_season": "",
+            "get_custom_season": False,
         }
 
     def __update_config(self):
@@ -381,6 +462,8 @@ class ANiStrm(_PluginBase):
             "fulladd": self._fulladd,
             "storageplace": self._storageplace,
             "proxy_url": self._proxy_url,
+            "custom_season": self._custom_season,
+            "get_custom_season": self._get_custom_season,
         })
 
     def get_page(self) -> List[dict]:
