@@ -163,12 +163,33 @@ class ANiStrm(_PluginBase):
     @retry(Exception, tries=3, logger=logger, ret=[])
     def get_current_season_list(self) -> List:
         url = f'{self._proxy_url}/{self.__get_ani_season()}/'
+        logger.info(f"正在请求URL: {url}")
 
-        rep = RequestUtils(ua=settings.USER_AGENT if settings.USER_AGENT else None,
-                           proxies=settings.PROXY if settings.PROXY else None).post(url=url)
-        logger.debug(rep.text)
-        files_json = rep.json()['files']
-        return [file['name'] for file in files_json]
+        try:
+            # 先尝试GET方法
+            rep = RequestUtils(ua=settings.USER_AGENT if settings.USER_AGENT else None,
+                              proxies=settings.PROXY if settings.PROXY else None).get_res(url=url)
+            logger.debug(f"GET响应: {rep.status_code}")
+            logger.debug(f"响应内容: {rep.text}")
+            
+            if rep.status_code != 200:
+                # 如果GET失败，尝试POST方法
+                logger.info("GET请求失败，尝试POST请求")
+                rep = RequestUtils(ua=settings.USER_AGENT if settings.USER_AGENT else None,
+                                  proxies=settings.PROXY if settings.PROXY else None).post(url=url)
+                logger.debug(f"POST响应: {rep.status_code}")
+                logger.debug(f"响应内容: {rep.text}")
+
+            if rep.status_code != 200:
+                logger.error(f"请求失败，状态码: {rep.status_code}")
+                return []
+
+            files_json = rep.json().get('files', [])
+            logger.info(f"获取到 {len(files_json)} 个文件")
+            return [file['name'] for file in files_json]
+        except Exception as e:
+            logger.error(f"请求发生错误: {str(e)}")
+            raise
 
     @retry(Exception, tries=3, logger=logger, ret=[])
     def get_latest_list(self) -> List:
@@ -485,5 +506,15 @@ class ANiStrm(_PluginBase):
 
 if __name__ == "__main__":
     anistrm = ANiStrm()
-    name_list = anistrm.get_latest_list()
-    print(name_list)
+    # 测试不同季度的访问
+    test_seasons = ["2024-1", "2024-4", "2025-1"]
+    for season in test_seasons:
+        print(f"\n测试季度: {season}")
+        anistrm._custom_season = season
+        anistrm._get_custom_season = True
+        try:
+            name_list = anistrm.get_current_season_list()
+            print(f"获取到 {len(name_list)} 个文件")
+            print(f"文件列表: {name_list[:5]}...")  # 只显示前5个文件
+        except Exception as e:
+            print(f"获取失败: {str(e)}")
